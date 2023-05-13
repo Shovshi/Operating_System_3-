@@ -7,7 +7,8 @@
 #include <fcntl.h>
 #include <sys/un.h>
 #include <sys/mman.h>   
-#include <sys/stat.h>  
+#include <sys/stat.h>
+#include "Server.h"  
 
 #define FILENAME "received_file.txt"
 #define BUFFER_SIZE 1024
@@ -508,15 +509,107 @@ int pipe_server()
 }
 
 
-int main(int argv , char* argc[])
+int server_options(int argc, char* argv[])
 {
+    // Set up socket
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0)
+    {
+        perror("Error opening socket");
+        exit(1);
+    }
+
+    // Set up server address
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(8081);
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
+
+    // Bind socket to address
+    if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+        perror("Error binding socket to address");
+        exit(1);
+    }
+
+    // Listen for incoming connections
+    if (listen(sockfd, 1) < 0)
+    {
+        perror("Error listening for incoming connections");
+        exit(1);
+    }
+
+    // Accept incoming connection
+    int newsockfd;
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    newsockfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
+    if (newsockfd < 0)
+    {
+        perror("Error accepting incoming connection");
+        exit(1);
+    }
+
+    // Receive data from client
+    char buffer[2048];
+    if (recv(newsockfd, buffer, sizeof(buffer), 0) < 0)
+    {
+        perror("Error receiving data from client");
+        exit(1);
+    }
+
+    // Close sockets
+    close(newsockfd);
+    close(sockfd);
+
+    // Parse received data
+    char type[1024], param[1024];
+    sscanf(buffer, "%s %s", type, param);
+    
+
+    // Process data based on type and param
+    switch (get_type_param_code(type, param)) {
+        case 0:
+            printf("Invalid type and param combination.\n");
+            break;
+        case 1:
+            ipv4_tcp_s();
+            break;
+        case 2:
+            ipv4_udp_s();
+            break;
+        case 3:
+            ipv6_tcp_s();
+            break;
+        case 4:
+            ipv6_udp_s();
+            break;
+        case 5:
+            mmap_filename_s();
+            break;
+        case 6:
+            pipe_filename_s();
+            break;
+        case 7:
+            uds_dgram_s();
+            break;
+        case 8:
+            uds_stream_s();
+            break;
+        default:
+            printf("Unexpected error occurred.\n");
+            break;
+    }
+
+    return 0;
+}
+
     //ipv4_tcp_server(atoi(argc[1]));
     //ipv4_udp_server(atoi(argc[1]));
     //ipv6_udp_server(atoi(argc[1]));
     //ipv6_tcp_server(atoi(argc[1]));
     //uds_dgram_server();
     //uds_stream_server();
-    mmap_server();
+    //mmap_server();
     //pipe_server();
-
-}

@@ -4,13 +4,14 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include "chat.h"
 
 void usage() 
 {
     printf("Usage: stnc [-c IP PORT] [-s PORT]\n");
 }
 
-int main(int argc, char *argv[]) 
+int chat(int argc, char *argv[]) 
 {
     int server_sock, client_sock;
     struct sockaddr_in server, client;

@@ -8,6 +8,7 @@
 #include <sys/un.h>
 #include <sys/mman.h>   
 #include <sys/stat.h>  
+#include "Client.h"
 
 
 #define FILENAME "file.txt"
@@ -395,15 +396,101 @@ int pipe_client()
     close(pipe_fd);
 }
 
-int main(int argv , char* argc[])
+int client_options(int argv , char* argc[])
 {
+    
+    if (argc < 7)
+        error_c("Usage: stnc -c IP PORT -p <type> <param>");
+
+    // Set up socket
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0)
+    {
+        perror("Error opening socket");
+        exit(1);
+    }
+
+    char ip_address[1024];
+    int port;
+    strcpy(ip_address, argc[2]);
+    port = atoi(argc[3]);
+
+    // Set up server address
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(8081);
+    serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Server IP address
+
+    // Connect to server
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+        perror("Error connecting to server");
+        exit(1);
+    }
+
+    // Send data over socket
+    char type[1024], param[1024];
+    strcpy(type, argc[5]);
+    strcpy(param, argc[6]);
+
+    char data[2048];
+    sprintf(data, "%s %s", type, param);
+    if (send(sockfd, data, strlen(data), 0) < 0)
+    {
+        perror("Error sending data");
+        exit(1);
+    }
+
+    // Close socket
+    close(sockfd);
+    sleep(1);
+
+    send_options_client(type, param, ip_address, port);
+    return 0;
+}
+
+send_options_client(char *type , char *param , char *ip_address , int port)
+{
+    switch (type[0])
+    {
+    case 'i':
+        switch (param[0]) {
+            case 't':
+                ipv4_tcp_client(port, ip_address);
+                break;
+            case 'u':
+                ipv4_udp_client(port, ip_address);
+                break;
+        }
+        break;
+    case 'm':
+        mmap_client();
+        break;
+    case 'p':
+        pipe_client();
+        break;
+    case 'u':
+        switch (param[0])
+        {
+            case 'd':
+                uds_dgram_client();
+                break;
+            case 's':
+                uds_stream_client();
+                break;
+        }
+        break;
+    default:
+        printf("Invalid option\n");
+        break;
+}
+}
     //ipv4_tcp_client(atoi(argc[3]) , argc[2]);
     //ipv4_udp_client(atoi(argc[3]) , argc[2]);
     //ipv6_udp_client(atoi(argc[3]) , argc[2]);
     //ipv6_tcp_client(atoi(argc[3]) , argc[2]);
     //uds_dgram_client();
     //uds_stream_client();
-    mmap_client();
+    //mmap_client();
     //pipe_client();
-    
-}
