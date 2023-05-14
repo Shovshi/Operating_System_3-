@@ -1,33 +1,5 @@
 #include "Client.h"
 
-void create_large_file() 
-{
-    const char* filename = "large_file.bin";
-    int size = 100 * 1024 * 1024; // 100MB
-
-    FILE* file = fopen(filename, "wb");
-    if (!file) {
-        printf("Error: could not create file %s\n", filename);
-        return;
-    }
-
-    char buffer[1024];
-    for (int i = 0; i < sizeof(buffer); i++) {
-        buffer[i] = i % 256;
-    }
-
-    while (size > 0) {
-        int bytes_to_write = sizeof(buffer);
-        if (bytes_to_write > size) {
-            bytes_to_write = size;
-        }
-        fwrite(buffer, 1, bytes_to_write, file);
-        size -= bytes_to_write;
-    }
-
-    fclose(file);
-}
-
 int ipv4_tcp_client(int port, char *ip_address) 
 {
     int sock;
@@ -59,7 +31,6 @@ int ipv4_tcp_client(int port, char *ip_address)
         perror("recv");
         return 1;
     }
-    printf("%s\n", response);
 
     file_fd = open(FILENAME, O_RDONLY);
     if (file_fd == -1)
@@ -81,48 +52,49 @@ int ipv4_tcp_client(int port, char *ip_address)
     close(sock);
 
     return 0;
-};
+}
 
 int ipv4_udp_client(int port , char* ip_address)
 {
-    int sock;
-    struct sockaddr_in server;
-    char response[1024];
+     // Open the input file
+    FILE* input_file = fopen(FILENAME, "r");
+    if (!input_file) {
+        perror("fopen() failed");
+        return -1;
+    }
+
+    // Create a UDP socket
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("socket() failed");
+        fclose(input_file);
+        return -1;
+    }
+
+    // Set the server address and port
+    struct sockaddr_in server_addr = {0};
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = inet_addr(ip_address);
+    server_addr.sin_port = htons(port);
+
+    // Send the file to the server in chunks
     char buffer[BUFFER_SIZE];
-    int file_fd;
-    ssize_t read_size;
-
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock == -1) 
-    {
-        perror("socket");
-        return 1;
-    }
-
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = inet_addr(ip_address);
-    server.sin_port = htons(port);
-
-    printf("Sending file to %s:%d\n", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
-
-    file_fd = open(FILENAME, O_RDONLY);
-    if (file_fd == -1)
-    {
-        perror("open");
-        return 1;
-    }
-
-    while ((read_size = read(file_fd, buffer, BUFFER_SIZE)) > 0)
-    {
-        if (sendto(sock, buffer, read_size, 0, (struct sockaddr *)&server, sizeof(server)) < 0) 
-        {
-            perror("sendto");
-            return 1;
+    size_t bytes_read = 0;
+    ssize_t bytes_sent = 0;
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), input_file)) > 0) {
+        bytes_sent = sendto(sockfd, buffer, bytes_read, 0,
+                            (struct sockaddr*)&server_addr, sizeof(server_addr));
+        if (bytes_sent < 0) {
+            perror("sendto() failed");
+            fclose(input_file);
+            close(sockfd);
+            return -1;
         }
     }
 
-    close(file_fd);
-    close(sock);
+    // Close the socket and file
+    fclose(input_file);
+    close(sockfd);
 
     return 0;
 
@@ -130,48 +102,56 @@ int ipv4_udp_client(int port , char* ip_address)
 
 int ipv6_udp_client(int port , char* ip_address)
 {
-    int sock;
-    struct sockaddr_in6 server;
-    char response[BUFFER_SIZE];
+      int sockfd;
+    struct sockaddr_in6 server_addr;
     char buffer[BUFFER_SIZE];
-    int file_fd;
-    ssize_t read_size;
+    FILE* fp;
 
-    sock = socket(AF_INET6, SOCK_DGRAM, 0);
-    if (sock == -1)
-    {
-        perror("socket");
-        return 1;
+    // Create socket
+    sockfd = socket(AF_INET6, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("Error creating socket");
+        return -1;
     }
 
-    server.sin6_family = AF_INET6;
-    if (inet_pton(AF_INET6, ip_address, &server.sin6_addr) <= 0)
-    {
-        perror("inet_pton");
-        return 1;
-    }
-    server.sin6_port = htons(port);
-
-    printf("Sending file to %s:%d\n", ip_address, ntohs(server.sin6_port));
-
-    file_fd = open(FILENAME, O_RDONLY);
-    if (file_fd == -1)
-    {
-        perror("open");
-        return 1;
+    // Set up server address
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin6_family = AF_INET6;
+    server_addr.sin6_port = htons(port);
+    if (inet_pton(AF_INET6, ip_address, &server_addr.sin6_addr) != 1) {
+        perror("Invalid address");
+        return -1;
     }
 
-    while ((read_size = read(file_fd, buffer, BUFFER_SIZE)) > 0)
-    {
-        if (sendto(sock, buffer, read_size, 0, (struct sockaddr *)&server, sizeof(server)) < 0)
-        {
-            perror("sendto");
-            return 1;
+    // Open file for reading
+    fp = fopen(FILENAME, "rb");
+    if (fp == NULL) {
+        perror("Error opening file");
+        return -1;
+    }
+
+    // Read file and send data to server
+    while (!feof(fp)) {
+        // Read data from file
+        int bytes_read = fread(buffer, 1, BUFFER_SIZE, fp);
+        if (bytes_read < 0) {
+            perror("Error reading file");
+            fclose(fp);
+            return -1;
+        }
+
+        // Send data to server
+        int bytes_sent = sendto(sockfd, buffer, bytes_read, 0, (struct sockaddr*) &server_addr, sizeof(server_addr));
+        if (bytes_sent < 0) {
+            perror("Error sending data");
+            fclose(fp);
+            return -1;
         }
     }
 
-    close(file_fd);
-    close(sock);
+    // Close file and socket
+    fclose(fp);
+    close(sockfd);
 
     return 0;
 }
@@ -232,45 +212,49 @@ int ipv6_tcp_client(int port, char* ip_address) {
 
 int uds_dgram_client()
 {
-    int s, len;
-    struct sockaddr_un remote;
-    char str[100];
-
-    if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        perror("socket");
-        exit(1);
+     // Create a socket for sending datagrams
+    int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("socket() failed");
+        return;
     }
 
-    printf("Trying to connect to server...\n");
+    // Set the socket to non-blocking mode
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
-    memset(&remote, 0, sizeof(remote));
-    remote.sun_family = AF_UNIX;
-    strcpy(remote.sun_path, SOCK_PATH);
-    len = strlen(remote.sun_path) + sizeof(remote.sun_family);
-
-    if (connect(s, (struct sockaddr *)&remote, len) == -1) {
-        perror("connect");
-        exit(1);
+    // Connect the socket to the server
+    struct sockaddr_un server_addr = {0};
+    server_addr.sun_family = AF_UNIX;
+    strncpy(server_addr.sun_path, SERVER_PATH, sizeof(server_addr.sun_path) - 1);
+    if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("connect() failed");
+        close(sockfd);
+        return;
     }
 
-    printf("Connected.\n");
-
-    FILE *fp = fopen(FILENAME, "rb");
-    if (fp == NULL) {
-        perror("fopen");
-        exit(1);
+    // Open the file to be sent
+    FILE* file = fopen(FILENAME, "rb");
+    if (!file) {
+        perror("fopen() failed");
+        close(sockfd);
+        return;
     }
 
+    // Send the file contents in datagrams
+    char buffer[BUFFER_SIZE];
     size_t bytes_read;
-    while ((bytes_read = fread(str, sizeof(char), sizeof(str), fp)) > 0) {
-        if (send(s, str, bytes_read, 0) < 0) {
-            perror("send");
-            exit(1);
+    while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, file)) > 0) {
+        ssize_t bytes_sent = send(sockfd, buffer, bytes_read, 0);
+        if (bytes_sent < 0) {
+            perror("send() failed");
+            break;
         }
     }
 
-    fclose(fp);
-    close(s);
+    // Close the file and socket
+    fclose(file);
+    close(sockfd);
     return 0;
 }
 
@@ -409,7 +393,6 @@ int pipe_client()
 
 int client_options(int argv , char* argc[])
 {
-    
     if (argv < 7)
         perror("Usage: stnc -c IP PORT -p <type> <param>");
 
@@ -457,52 +440,50 @@ int client_options(int argv , char* argc[])
     close(sockfd);
     sleep(1);
 
-    create_large_file();
     send_options_client(type, param, ip_address, port);
     return 0;
 }
 
 void send_options_client(char *type , char *param , char *ip_address , int port)
 {
-    switch (type[0])
+    if (strcmp(type, "ipv4") == 0 && (strcmp(param, "tcp")) == 0)
     {
-    case 'i':
-        switch (param[0]) {
-            case 't':
-                ipv4_tcp_client(port, ip_address);
-                break;
-            case 'u':
-                ipv4_udp_client(port, ip_address);
-                break;
-        }
-        break;
-    case 'm':
-        mmap_client();
-        break;
-    case 'p':
+        ipv4_tcp_client(port , ip_address);
+    }
+    else if (strcmp(type, "ipv4") == 0 && (strcmp(param, "udp")) == 0)
+    {
+        ipv4_udp_client(port , ip_address);
+    }
+    else if (strcmp(type, "ipv6") == 0 && (strcmp(param, "tcp")) == 0)
+    {
+
+        ipv6_tcp_client(port, ip_address);
+    }
+    else if (strcmp(type, "ipv6") == 0 && (strcmp(param, "udp")) == 0)
+    {
+
+        ipv6_udp_client(port , ip_address);
+    }
+
+    else if (strcmp(type, "mmap") == 0 && (strcmp(param, "filename")) == 0)
+    {
+
+        mmap_client(port , ip_address);
+    }
+    else if (strcmp(type, "pipe") == 0 && (strcmp(param, "filename")) == 0)
+    {
+
         pipe_client();
-        break;
-    case 'u':
-        switch (param[0])
-        {
-            case 'd':
-                uds_dgram_client();
-                break;
-            case 's':
-                uds_stream_client();
-                break;
-        }
-        break;
-    default:
-        printf("Invalid option\n");
-        break;
+    }
+    else if (strcmp(type, "uds") == 0 && (strcmp(param, "dgram")) == 0)
+    {
+
+        uds_dgram_client();
+    }
+    else if (strcmp(type, "uds") == 0 && (strcmp(param, "stream")) == 0)
+    {
+
+        uds_stream_client();
+    }    
 }
-}
-    //ipv4_tcp_client(atoi(argc[3]) , argc[2]);
-    //ipv4_udp_client(atoi(argc[3]) , argc[2]);
-    //ipv6_udp_client(atoi(argc[3]) , argc[2]);
-    //ipv6_tcp_client(atoi(argc[3]) , argc[2]);
-    //uds_dgram_client();
-    //uds_stream_client();
-    //mmap_client();
-    //pipe_client();
+

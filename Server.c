@@ -35,51 +35,44 @@ unsigned int checksum(char *filename)
 
 void send_options_server(char *type , char *param , int port , int qFlag)
 {
-    switch (type[0])
+   if (strcmp(type, "ipv4") == 0 && (strcmp(param, "tcp")) == 0)
     {
-    case 'i':
-        if (strcmp(type, "ipv4") == 0) {
-            switch (param[0]) {
-                case 't':
-                    ipv4_tcp_server(port , qFlag);
-                    break;
-                case 'u':
-                    ipv4_udp_server(port , qFlag);
-                    break;
-            }
-        } else if (strcmp(type, "ipv6") == 0) {
-            switch (param[0]) {
-                case 't':
-                    ipv6_tcp_server(port , qFlag);
-                    break;
-                case 'u':
-                    ipv6_udp_server(port , qFlag);
-                    break;
-            }
-        } else {
-            printf("Invalid option\n");
-        }
-        break;
-    case 'm':
+        ipv4_tcp_server(port, qFlag);
+    }
+    else if (strcmp(type, "ipv4") == 0 && (strcmp(param, "udp")) == 0)
+    {
+        ipv4_udp_server(port, qFlag);
+    }
+    else if (strcmp(type, "ipv6") == 0 && (strcmp(param, "tcp")) == 0)
+    {
+
+        ipv6_tcp_server(port, qFlag);
+    }
+    else if (strcmp(type, "ipv6") == 0 && (strcmp(param, "udp")) == 0)
+    {
+
+        ipv6_udp_server(port, qFlag);
+    }
+
+    else if (strcmp(type, "mmap") == 0 && (strcmp(param, "filename")) == 0)
+    {
+
         mmap_server(qFlag);
-        break;
-    case 'p':
+    }
+    else if (strcmp(type, "pipe") == 0 && (strcmp(param, "filename")) == 0)
+    {
+
         pipe_server(qFlag);
-        break;
-    case 'u':
-        switch (param[0])
-        {
-            case 'd':
-                uds_dgram_server(qFlag);
-                break;
-            case 's':
-                uds_stream_server(qFlag);
-                break;
-        }
-        break;
-    default:
-        printf("Invalid option\n");
-        break;
+    }
+    else if (strcmp(type, "uds") == 0 && (strcmp(param, "dgram")) == 0)
+    {
+
+        uds_dgram_server(qFlag);
+    }
+    else if (strcmp(type, "uds") == 0 && (strcmp(param, "stream")) == 0)
+    {
+
+        uds_stream_server(qFlag);
     }
 }
 
@@ -100,7 +93,7 @@ int ipv4_tcp_server(int port , int qFlag)
 
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(1234);
+    server.sin_port = htons(port);
 
     if (bind(sock, (struct sockaddr *)&server, sizeof(server)) < 0) 
     {
@@ -108,13 +101,11 @@ int ipv4_tcp_server(int port , int qFlag)
         return 1;
     }
 
-    if (listen(sock, 5) < 0) 
+    if (listen(sock, 6) < 0) 
     {
         perror("listen");
         return 1;
     }
-
-    printf("Waiting for incoming connections...\n");
 
     socklen_t client_len = sizeof(client);
     client_sock = accept(sock, (struct sockaddr *)&client, &client_len);
@@ -124,15 +115,7 @@ int ipv4_tcp_server(int port , int qFlag)
         return 1;
     }
 
-    printf("Accepted connection from %s:%d\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
-
-    if (send(client_sock, "Welcome to the server!\n", 23, 0) < 0) 
-    {
-        perror("send");
-        return 1;
-    }
-
-    file = fopen("received_file", "w");
+    file = fopen(FILENAME, "w");
     if (file == NULL)
     {
         perror("fopen");
@@ -151,8 +134,8 @@ int ipv4_tcp_server(int port , int qFlag)
      if (qFlag == 0)
     {
         // Calculate the checksum
-        unsigned int check_sum = checksum("received_file.bin");
-        unsigned int checksum_client = checksum("large_file.bin");
+        unsigned int check_sum = checksum("received_file.txt");
+        unsigned int checksum_client = checksum("large_file.txt");
         printf("Checksum of sent file: %u\n", checksum_client);
         printf("Checksum of received file: %u\n", check_sum);
     }
@@ -162,68 +145,66 @@ int ipv4_tcp_server(int port , int qFlag)
 
 int ipv4_udp_server(int port , int qFlag)
 {
-    int sock, client_sock, addr_len;
-    struct sockaddr_in server, client;
+    int sockfd;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_len = sizeof(client_addr);
     char buffer[BUFFER_SIZE];
-    ssize_t read_size;
-    FILE *file;
 
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock == -1) 
-    {
-        perror("socket");
-        return 1;
+    // Create socket
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("Error creating socket");
+        return -1;
     }
 
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(port);
+    // Set up server address
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(1234);
 
-    if (bind(sock, (struct sockaddr *)&server, sizeof(server)) < 0) 
-    {
-        perror("bind");
-        return 1;
+    // Bind socket to address
+    if (bind(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+        perror("Error binding socket to address");
+        return -1;
     }
 
-    printf("Waiting for incoming connections...\n");
+    printf("Server listening on port %d...\n", port);
 
-    addr_len = sizeof(client);
-    memset(&client, 0, addr_len);
+    while (1) {
+        // Receive data from client
+        memset(buffer, 0, sizeof(buffer));
+        int recv_bytes = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, (struct sockaddr *) &client_addr, &client_len);
+        if (recv_bytes < 0) {
+            perror("Error receiving data from client");
+            return -1;
+        }
 
-    if ((read_size = recvfrom(sock, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client, &addr_len)) < 0) 
-    {
-        perror("recvfrom");
-        return 1;
+        // Write received data to file
+        FILE *fp = fopen(FILENAME, "ab");
+        if (fp == NULL) {
+            perror("Error opening file");
+            return -1;
+        }
+        fwrite(buffer, 1, recv_bytes, fp);
+        fclose(fp);
+
+        // Send acknowledgement to client
+        char ack[] = "ACK";
+        int send_bytes = sendto(sockfd, ack, sizeof(ack), 0, (struct sockaddr *) &client_addr, client_len);
+        if (send_bytes < 0) {
+            perror("Error sending acknowledgement to client");
+            return -1;
+        }
     }
 
-    printf("Accepted connection from %s:%d\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
-
-    if (sendto(sock, "Welcome to the server!\n", 23, 0, (struct sockaddr *)&client, addr_len) < 0) 
-    {
-        perror("sendto");
-        return 1;
-    }
-
-    file = fopen("received_file", "w");
-    if (file == NULL)
-    {
-        perror("fopen");
-        return 1;
-    }
-
-    while ((read_size = recvfrom(sock, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client, &addr_len)) > 0)
-    {
-        fwrite(buffer, sizeof(char), read_size, file);
-    }
-
-    fclose(file);
-    close(sock);
+    close(sockfd);
 
      if (qFlag == 0)
     {
         // Calculate the checksum
-        unsigned int check_sum = checksum("received_file.bin");
-        unsigned int checksum_client = checksum("large_file.bin");
+        unsigned int check_sum = checksum("received_file.txt");
+        unsigned int checksum_client = checksum("large_file.txt");
         printf("Checksum of sent file: %u\n", checksum_client);
         printf("Checksum of received file: %u\n", check_sum);
     }
@@ -233,72 +214,73 @@ int ipv4_udp_server(int port , int qFlag)
 
 int ipv6_udp_server(int port , int qFlag)
 {
-    int sock, client_sock, addr_len;
-    struct sockaddr_in6 server, client;
+   int sockfd;
+    struct sockaddr_in6 server_addr, client_addr;
     char buffer[BUFFER_SIZE];
-    ssize_t read_size;
-    FILE *file;
+    FILE* fp;
 
-    sock = socket(AF_INET6, SOCK_DGRAM, 0);
-    if (sock == -1) 
-    {
-        perror("socket");
-        return 1;
+    // Create socket
+    sockfd = socket(AF_INET6, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("Error creating socket");
+        return -1;
     }
 
-    memset(&server, 0, sizeof(server));
-    server.sin6_family = AF_INET6;
-    server.sin6_addr = in6addr_any;
-    server.sin6_port = htons(port);
+    // Set up server address
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin6_family = AF_INET6;
+    server_addr.sin6_port = htons(port);
+    server_addr.sin6_addr = in6addr_any;
 
-    if (bind(sock, (struct sockaddr *)&server, sizeof(server)) < 0) 
-    {
-        perror("bind");
-        return 1;
+    // Bind socket to server address
+    if (bind(sockfd, (struct sockaddr*) &server_addr, sizeof(server_addr)) < 0) {
+        perror("Error binding socket");
+        return -1;
     }
 
-    printf("Waiting for incoming connections...\n");
-
-    addr_len = sizeof(client);
-    memset(&client, 0, addr_len);
-
-    if ((read_size = recvfrom(sock, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client, &addr_len)) < 0) 
-    {
-        perror("recvfrom");
-        return 1;
+    // Open file for writing
+    fp = fopen(FILENAME, "wb");
+    if (fp == NULL) {
+        perror("Error opening file");
+        return -1;
     }
 
-    char client_addr_str[INET6_ADDRSTRLEN];
-    inet_ntop(AF_INET6, &(client.sin6_addr), client_addr_str, INET6_ADDRSTRLEN);
+    // Receive data from client and write to file
+    socklen_t client_len;
+    int bytes_received;
+    while (1) {
+        // Receive data from client
+        client_len = sizeof(client_addr);
+        bytes_received = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, (struct sockaddr*) &client_addr, &client_len);
+        if (bytes_received < 0) {
+            perror("Error receiving data");
+            fclose(fp);
+            return -1;
+        }
 
-    printf("Accepted connection from %s:%d\n", client_addr_str, ntohs(client.sin6_port));
+        // If no more data is received, break out of loop
+        if (bytes_received == 0) {
+            break;
+        }
 
-    if (sendto(sock, "Welcome to the server!\n", 23, 0, (struct sockaddr *)&client, addr_len) < 0) 
-    {
-        perror("sendto");
-        return 1;
+        // Write data to file
+        int bytes_written = fwrite(buffer, 1, bytes_received, fp);
+        if (bytes_written < bytes_received) {
+            perror("Error writing to file");
+            fclose(fp);
+            return -1;
+        }
     }
 
-    file = fopen("received_file", "w");
-    if (file == NULL)
-    {
-        perror("fopen");
-        return 1;
-    }
-
-    while ((read_size = recvfrom(sock, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client, &addr_len)) > 0)
-    {
-        fwrite(buffer, sizeof(char), read_size, file);
-    }
-
-    fclose(file);
-    close(sock);
+    // Close file and socket
+    fclose(fp);
+    close(sockfd);
 
     if (qFlag == 0)
     {
         // Calculate the checksum
-        unsigned int check_sum = checksum("received_file.bin");
-        unsigned int checksum_client = checksum("large_file.bin");
+        unsigned int check_sum = checksum("received_file.txt");
+        unsigned int checksum_client = checksum("large_file.txt");
         printf("Checksum of sent file: %u\n", checksum_client);
         printf("Checksum of received file: %u\n", check_sum);
     }
@@ -353,15 +335,7 @@ int ipv6_tcp_server(int port , int qFlag)
     char client_addr_str[INET6_ADDRSTRLEN];
     inet_ntop(AF_INET6, &(client.sin6_addr), client_addr_str, INET6_ADDRSTRLEN);
 
-    printf("Accepted connection from %s:%d\n", client_addr_str, ntohs(client.sin6_port));
-
-    if (send(client_sock, "Welcome to the server!\n", 23, 0) < 0) 
-    {
-        perror("send");
-        return 1;
-    }
-
-    file = fopen("received_file", "w");
+    file = fopen(FILENAME, "w");
     if (file == NULL)
     {
         perror("fopen");
@@ -380,8 +354,8 @@ int ipv6_tcp_server(int port , int qFlag)
     if (qFlag == 0)
     {
         // Calculate the checksum
-        unsigned int check_sum = checksum("received_file.bin");
-        unsigned int checksum_client = checksum("large_file.bin");
+        unsigned int check_sum = checksum("received_file.txt");
+        unsigned int checksum_client = checksum("large_file.txt");
         printf("Checksum of sent file: %u\n", checksum_client);
         printf("Checksum of received file: %u\n", check_sum);
     }
@@ -392,82 +366,52 @@ int ipv6_tcp_server(int port , int qFlag)
 
 int uds_dgram_server(int qFlag)
 {
-    int s, s2, len;
-    struct sockaddr_un remote, local = {
-        .sun_family = AF_UNIX,
-    };
+    // Create a socket for receiving datagrams
+    int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("socket() failed");
+        return;
+    }
+
+    // Bind the socket to a local address
+    struct sockaddr_un local_addr = {0};
+    local_addr.sun_family = AF_UNIX;
+    strncpy(local_addr.sun_path, SERVER_PATH, sizeof(local_addr.sun_path) - 1);
+    unlink(local_addr.sun_path);
+    if (bind(sockfd, (struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
+        perror("bind() failed");
+        close(sockfd);
+        return;
+    }
+
+    // Open the output file
+    FILE* file = fopen(FILENAME, "wb");
+    if (!file) {
+        perror("fopen() failed");
+        close(sockfd);
+        return;
+    }
+
+    // Receive datagrams and write them to the output file
     char buffer[BUFFER_SIZE];
     ssize_t bytes_received;
-
-    if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        perror("socket");
-        exit(1);
+    while ((bytes_received = recv(sockfd, buffer, sizeof(buffer), 0)) > 0) {
+        size_t bytes_written = fwrite(buffer, 1, bytes_received, file);
+        if (bytes_written < bytes_received) {
+            perror("fwrite() failed");
+            break;
+        }
     }
 
-    strcpy(local.sun_path, SOCK_PATH);
-    unlink(local.sun_path);
-    len = strlen(local.sun_path) + sizeof(local.sun_family);
-    if (bind(s, (struct sockaddr *)&local, len) == -1) {
-        perror("bind");
-        exit(1);
-    }
-
-    if (listen(s, 5) == -1) {
-        perror("listen");
-        exit(1);
-    }
-
-    for (;;) {
-        printf("Waiting for a connection...\n");
-        socklen_t slen = sizeof(remote);
-        if ((s2 = accept(s, (struct sockaddr *)&remote, &slen)) == -1) {
-            perror("accept");
-            exit(1);
-        }
-
-        printf("Connected.\n");
-
-        // Read the filename from the client
-        bytes_received = recv(s2, buffer, BUFFER_SIZE, 0);
-        if (bytes_received == -1) {
-            perror("recv");
-            exit(1);
-        }
-
-        // Open the file for writing
-        FILE *fp = fopen(buffer, "wb");
-        if (!fp) {
-            perror("fopen");
-            exit(1);
-        }
-
-        // Read the file data from the client and write it to the file
-        while ((bytes_received = recv(s2, buffer, BUFFER_SIZE, 0)) > 0) 
-        {
-            if (fwrite(buffer, 1, bytes_received, fp) != (size_t)bytes_received) 
-            {
-                perror("fwrite");
-                exit(1);
-            }
-        }
-
-        if (bytes_received == -1) 
-        {
-            perror("recv");
-            exit(1);
-        }
-
-        fclose(fp);
-        printf("File received successfully.\n");
-
-        close(s2);
-    }
+    // Close the file and socket
+    fclose(file);
+    close(sockfd);
 
     if (qFlag == 0)
     {
         // Calculate the checksum
-        unsigned int check_sum = checksum("received_file.bin");
-        unsigned int checksum_client = checksum("large_file.bin");
+        unsigned int check_sum = checksum("received_file.txt");
+        unsigned int checksum_client = checksum("large_file.txt");
         printf("Checksum of sent file: %u\n", checksum_client);
         printf("Checksum of received file: %u\n", check_sum);
     }
@@ -533,8 +477,8 @@ int uds_stream_server(int qFlag)
     if (qFlag == 0)
     {
         // Calculate the checksum
-        unsigned int check_sum = checksum("received_file.bin");
-        unsigned int checksum_client = checksum("large_file.bin");
+        unsigned int check_sum = checksum("received_file.txt");
+        unsigned int checksum_client = checksum("large_file.txt");
         printf("Checksum of sent file: %u\n", checksum_client);
         printf("Checksum of received file: %u\n", check_sum);
     }
@@ -600,8 +544,8 @@ int mmap_server(int qFlag)
     if (qFlag == 0)
     {
         // Calculate the checksum
-        unsigned int check_sum = checksum("received_file.bin");
-        unsigned int checksum_client = checksum("large_file.bin");
+        unsigned int check_sum = checksum("received_file.txt");
+        unsigned int checksum_client = checksum("large_file.txt");
         printf("Checksum of sent file: %u\n", checksum_client);
         printf("Checksum of received file: %u\n", check_sum);
     }
@@ -642,15 +586,13 @@ int pipe_server(int qFlag)
     if (qFlag == 0)
     {
         // Calculate the checksum
-        unsigned int check_sum = checksum("received_file.bin");
-        unsigned int checksum_client = checksum("large_file.bin");
+        unsigned int check_sum = checksum("received_file.txt");
+        unsigned int checksum_client = checksum("large_file.txt");
         printf("Checksum of sent file: %u\n", checksum_client);
         printf("Checksum of received file: %u\n", check_sum);
     }
 
 }
-
-
 
 int server_options(int argc, char* argv[])
 {
@@ -716,7 +658,7 @@ int server_options(int argc, char* argv[])
     close(sockfd);
 
     int port;
-    port = atoi(argv[3]);
+    port = atoi(argv[2]);
 
     int qFlag = 0;
     if (argc >= 4 && strcmp(argv[3], "-q") == 0)
