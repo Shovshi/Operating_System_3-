@@ -566,45 +566,51 @@ int server_options(int argc, char* argv[])
     // Parse received data
     char type[1024], param[1024];
     sscanf(buffer, "%s %s", type, param);
+
+    int port;
+    port = atoi(argv[3]);
+
     
-
-    // Process data based on type and param
-    switch (get_type_param_code(type, param)) {
-        case 0:
-            printf("Invalid type and param combination.\n");
-            break;
-        case 1:
-            ipv4_tcp_s();
-            break;
-        case 2:
-            ipv4_udp_s();
-            break;
-        case 3:
-            ipv6_tcp_s();
-            break;
-        case 4:
-            ipv6_udp_s();
-            break;
-        case 5:
-            mmap_filename_s();
-            break;
-        case 6:
-            pipe_filename_s();
-            break;
-        case 7:
-            uds_dgram_s();
-            break;
-        case 8:
-            uds_stream_s();
-            break;
-        default:
-            printf("Unexpected error occurred.\n");
-            break;
-    }
-
+    send_options_server(type, param, port);
     return 0;
 }
 
+ void send_options_server(char *type , char *param , int port)
+ {
+    switch (type[0])
+    {
+    case 'i':
+        switch (param[0]) {
+            case 't':
+                ipv4_tcp_server(port);
+                break;
+            case 'u':
+                ipv4_udp_server(port);
+                break;
+        }
+        break;
+    case 'm':
+        mmap_server();
+        break;
+    case 'p':
+        pipe_server();
+        break;
+    case 'u':
+        switch (param[0])
+        {
+            case 'd':
+                uds_dgram_server();
+                break;
+            case 's':
+                uds_stream_server();
+                break;
+        }
+        break;
+    default:
+        printf("Invalid option\n");
+        break;
+ }
+ }
     //ipv4_tcp_server(atoi(argc[1]));
     //ipv4_udp_server(atoi(argc[1]));
     //ipv6_udp_server(atoi(argc[1]));
