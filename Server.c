@@ -1,6 +1,89 @@
 #include "Server.h"  
 
-int ipv4_tcp_server(int port)
+
+unsigned int checksum(char *filename)
+{
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        printf("Error: could not open file %s\n", filename);
+        return 0;
+    }
+
+    fseek(file, 0, SEEK_END);
+    int length = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char *data = malloc(length);
+    if (!data) {
+        printf("Error: could not allocate memory\n");
+        fclose(file);
+        return 0;
+    }
+
+    fread(data, 1, length, file);
+    fclose(file);
+
+    unsigned int sum = 0;
+    int i;
+    for (i = 0; i < length; i++) {
+        sum += data[i];
+    }
+
+    free(data);
+    return sum;
+}
+
+void send_options_server(char *type , char *param , int port , int qFlag)
+{
+    switch (type[0])
+    {
+    case 'i':
+        if (strcmp(type, "ipv4") == 0) {
+            switch (param[0]) {
+                case 't':
+                    ipv4_tcp_server(port , qFlag);
+                    break;
+                case 'u':
+                    ipv4_udp_server(port , qFlag);
+                    break;
+            }
+        } else if (strcmp(type, "ipv6") == 0) {
+            switch (param[0]) {
+                case 't':
+                    ipv6_tcp_server(port , qFlag);
+                    break;
+                case 'u':
+                    ipv6_udp_server(port , qFlag);
+                    break;
+            }
+        } else {
+            printf("Invalid option\n");
+        }
+        break;
+    case 'm':
+        mmap_server(qFlag);
+        break;
+    case 'p':
+        pipe_server(qFlag);
+        break;
+    case 'u':
+        switch (param[0])
+        {
+            case 'd':
+                uds_dgram_server(qFlag);
+                break;
+            case 's':
+                uds_stream_server(qFlag);
+                break;
+        }
+        break;
+    default:
+        printf("Invalid option\n");
+        break;
+    }
+}
+
+int ipv4_tcp_server(int port , int qFlag)
 {
     int sock, client_sock;
     struct sockaddr_in server, client;
@@ -65,10 +148,19 @@ int ipv4_tcp_server(int port)
     close(client_sock);
     close(sock);
 
+     if (qFlag == 0)
+    {
+        // Calculate the checksum
+        unsigned int check_sum = checksum("received_file.bin");
+        unsigned int checksum_client = checksum("large_file.bin");
+        printf("Checksum of sent file: %u\n", checksum_client);
+        printf("Checksum of received file: %u\n", check_sum);
+    }
+
     return 0;
 }
 
-int ipv4_udp_server(int port)
+int ipv4_udp_server(int port , int qFlag)
 {
     int sock, client_sock, addr_len;
     struct sockaddr_in server, client;
@@ -127,10 +219,19 @@ int ipv4_udp_server(int port)
     fclose(file);
     close(sock);
 
+     if (qFlag == 0)
+    {
+        // Calculate the checksum
+        unsigned int check_sum = checksum("received_file.bin");
+        unsigned int checksum_client = checksum("large_file.bin");
+        printf("Checksum of sent file: %u\n", checksum_client);
+        printf("Checksum of received file: %u\n", check_sum);
+    }
+
     return 0;
 }
 
-int ipv6_udp_server(int port)
+int ipv6_udp_server(int port , int qFlag)
 {
     int sock, client_sock, addr_len;
     struct sockaddr_in6 server, client;
@@ -193,10 +294,20 @@ int ipv6_udp_server(int port)
     fclose(file);
     close(sock);
 
+    if (qFlag == 0)
+    {
+        // Calculate the checksum
+        unsigned int check_sum = checksum("received_file.bin");
+        unsigned int checksum_client = checksum("large_file.bin");
+        printf("Checksum of sent file: %u\n", checksum_client);
+        printf("Checksum of received file: %u\n", check_sum);
+    }
+
+
     return 0;
 }
 
-int ipv6_tcp_server(int port)
+int ipv6_tcp_server(int port , int qFlag)
 {
     int sock, client_sock, addr_len;
     struct sockaddr_in6 server, client;
@@ -266,10 +377,20 @@ int ipv6_tcp_server(int port)
     close(client_sock);
     close(sock);
 
+    if (qFlag == 0)
+    {
+        // Calculate the checksum
+        unsigned int check_sum = checksum("received_file.bin");
+        unsigned int checksum_client = checksum("large_file.bin");
+        printf("Checksum of sent file: %u\n", checksum_client);
+        printf("Checksum of received file: %u\n", check_sum);
+    }
+
+
     return 0;
 }
 
-int uds_dgram_server()
+int uds_dgram_server(int qFlag)
 {
     int s, s2, len;
     struct sockaddr_un remote, local = {
@@ -342,10 +463,20 @@ int uds_dgram_server()
         close(s2);
     }
 
+    if (qFlag == 0)
+    {
+        // Calculate the checksum
+        unsigned int check_sum = checksum("received_file.bin");
+        unsigned int checksum_client = checksum("large_file.bin");
+        printf("Checksum of sent file: %u\n", checksum_client);
+        printf("Checksum of received file: %u\n", check_sum);
+    }
+
+
     return 0;
 }
 
-int uds_stream_server()
+int uds_stream_server(int qFlag)
 {
     int s, s2, len;
     struct sockaddr_un local, remote;
@@ -398,12 +529,21 @@ int uds_stream_server()
     fclose(fp);
     close(s2);
     close(s);
-    printf("File received successfully.\n");
+
+    if (qFlag == 0)
+    {
+        // Calculate the checksum
+        unsigned int check_sum = checksum("received_file.bin");
+        unsigned int checksum_client = checksum("large_file.bin");
+        printf("Checksum of sent file: %u\n", checksum_client);
+        printf("Checksum of received file: %u\n", check_sum);
+    }
+
 
     return 0;
 }
 
-int mmap_server()
+int mmap_server(int qFlag)
 {
     int fd;
     void* addr;
@@ -456,9 +596,19 @@ int mmap_server()
         perror("shm_unlink");
         exit(EXIT_FAILURE);
     }
+
+    if (qFlag == 0)
+    {
+        // Calculate the checksum
+        unsigned int check_sum = checksum("received_file.bin");
+        unsigned int checksum_client = checksum("large_file.bin");
+        printf("Checksum of sent file: %u\n", checksum_client);
+        printf("Checksum of received file: %u\n", check_sum);
+    }
+
 }
 
-int pipe_server()
+int pipe_server(int qFlag)
 {
     int fd;
     int pipe_fd;
@@ -488,7 +638,18 @@ int pipe_server()
     // Close the file and the pipe
     close(fd);
     close(pipe_fd);
+
+    if (qFlag == 0)
+    {
+        // Calculate the checksum
+        unsigned int check_sum = checksum("received_file.bin");
+        unsigned int checksum_client = checksum("large_file.bin");
+        printf("Checksum of sent file: %u\n", checksum_client);
+        printf("Checksum of received file: %u\n", check_sum);
+    }
+
 }
+
 
 
 int server_options(int argc, char* argv[])
@@ -557,66 +718,11 @@ int server_options(int argc, char* argv[])
     int port;
     port = atoi(argv[3]);
 
-    
-    send_options_server(type, param, port);
-    return 0;
-}
-
-void send_options_server(char *type , char *param , int port)
-{
-    switch (type[0])
+    int qFlag = 0;
+    if (argc >= 4 && strcmp(argv[3], "-q") == 0)
     {
-    case 'i':
-        if (strcmp(type, "ipv4") == 0) {
-            switch (param[0]) {
-                case 't':
-                    ipv4_tcp_server(port);
-                    break;
-                case 'u':
-                    ipv4_udp_server(port);
-                    break;
-            }
-        } else if (strcmp(type, "ipv6") == 0) {
-            switch (param[0]) {
-                case 't':
-                    ipv6_tcp_server(port);
-                    break;
-                case 'u':
-                    ipv6_udp_server(port);
-                    break;
-            }
-        } else {
-            printf("Invalid option\n");
-        }
-        break;
-    case 'm':
-        mmap_server();
-        break;
-    case 'p':
-        pipe_server();
-        break;
-    case 'u':
-        switch (param[0])
-        {
-            case 'd':
-                uds_dgram_server();
-                break;
-            case 's':
-                uds_stream_server();
-                break;
-        }
-        break;
-    default:
-        printf("Invalid option\n");
-        break;
+        qFlag = 1;
     }
-}
-
-    //ipv4_tcp_server(atoi(argc[1]));
-    //ipv4_udp_server(atoi(argc[1]));
-    //ipv6_udp_server(atoi(argc[1]));
-    //ipv6_tcp_server(atoi(argc[1]));
-    //uds_dgram_server();
-    //uds_stream_server();
-    //mmap_server();
-    //pipe_server();
+    send_options_server(type, param, port , qFlag);
+    return 0;
+} 

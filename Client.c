@@ -1,5 +1,33 @@
 #include "Client.h"
 
+void create_large_file() 
+{
+    const char* filename = "large_file.bin";
+    int size = 100 * 1024 * 1024; // 100MB
+
+    FILE* file = fopen(filename, "wb");
+    if (!file) {
+        printf("Error: could not create file %s\n", filename);
+        return;
+    }
+
+    char buffer[1024];
+    for (int i = 0; i < sizeof(buffer); i++) {
+        buffer[i] = i % 256;
+    }
+
+    while (size > 0) {
+        int bytes_to_write = sizeof(buffer);
+        if (bytes_to_write > size) {
+            bytes_to_write = size;
+        }
+        fwrite(buffer, 1, bytes_to_write, file);
+        size -= bytes_to_write;
+    }
+
+    fclose(file);
+}
+
 int ipv4_tcp_client(int port, char *ip_address) 
 {
     int sock;
@@ -53,7 +81,7 @@ int ipv4_tcp_client(int port, char *ip_address)
     close(sock);
 
     return 0;
-}
+};
 
 int ipv4_udp_client(int port , char* ip_address)
 {
@@ -429,6 +457,7 @@ int client_options(int argv , char* argc[])
     close(sockfd);
     sleep(1);
 
+    create_large_file();
     send_options_client(type, param, ip_address, port);
     return 0;
 }
