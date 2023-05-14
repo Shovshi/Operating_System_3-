@@ -1,3 +1,20 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/un.h>
+#include <sys/mman.h>   
+#include <sys/stat.h>  
+
+#define FILENAME "file.txt"
+#define BUFFER_SIZE 1024
+#define SOCK_PATH "echo_socket"
+#define SHM_NAME "/my_shm"
+#define PAGE_SIZE 4096
+#define PIPE_NAME "/tmp/my_pipe"
 
 int client_options(int argv, char *argc[]);
 void send_options_client(char *type , char *param ,char *ip_address , int port);

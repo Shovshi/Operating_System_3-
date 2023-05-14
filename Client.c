@@ -1,23 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/un.h>
-#include <sys/mman.h>   
-#include <sys/stat.h>  
 #include "Client.h"
-
-
-#define FILENAME "file.txt"
-#define BUFFER_SIZE 1024
-#define SOCK_PATH "echo_socket"
-#define SHM_NAME "/my_shm"
-#define PAGE_SIZE 4096
-#define PIPE_NAME "/tmp/my_pipe"
-
 
 int ipv4_tcp_client(int port, char *ip_address) 
 {
@@ -362,6 +343,7 @@ int mmap_client()
     // Close the file and the shared memory object
     close(fd);
     close(shm_fd);
+    return 0;
 }
 
 int pipe_client()
@@ -394,13 +376,14 @@ int pipe_client()
     // Close the file and the pipe
     close(fd);
     close(pipe_fd);
+    return 0;
 }
 
 int client_options(int argv , char* argc[])
 {
     
-    if (argc < 7)
-        error_c("Usage: stnc -c IP PORT -p <type> <param>");
+    if (argv < 7)
+        perror("Usage: stnc -c IP PORT -p <type> <param>");
 
     // Set up socket
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);

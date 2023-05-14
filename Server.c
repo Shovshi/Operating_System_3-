@@ -1,22 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/un.h>
-#include <sys/mman.h>   
-#include <sys/stat.h>
 #include "Server.h"  
-
-#define FILENAME "received_file.txt"
-#define BUFFER_SIZE 1024
-#define SOCK_PATH "echo_socket"
-#define SHM_NAME "/my_shm"
-#define PAGE_SIZE 4096
-#define PIPE_NAME "/tmp/my_pipe"
-
 
 int ipv4_tcp_server(int port)
 {
@@ -521,6 +503,7 @@ int server_options(int argc, char* argv[])
 
     // Set up server address
     struct sockaddr_in serv_addr;
+    char buffer[BUFFER_SIZE] = {0};
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(8081);
@@ -541,7 +524,7 @@ int server_options(int argc, char* argv[])
     }
 
     // Accept incoming connection
-    int newsockfd;
+    int newsockfd, valread;
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     newsockfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
@@ -552,20 +535,24 @@ int server_options(int argc, char* argv[])
     }
 
     // Receive data from client
-    char buffer[2048];
-    if (recv(newsockfd, buffer, sizeof(buffer), 0) < 0)
+   char *type, *param;
+    while (1)
     {
-        perror("Error receiving data from client");
-        exit(1);
+        valread = read(newsockfd, buffer, BUFFER_SIZE);
+        if (valread <= 0)
+        {
+            break;
+        }
+
+        // Parse received data
+        type = strtok(buffer, " ");
+        param = strtok(NULL, " ");
     }
+
 
     // Close sockets
     close(newsockfd);
     close(sockfd);
-
-    // Parse received data
-    char type[1024], param[1024];
-    sscanf(buffer, "%s %s", type, param);
 
     int port;
     port = atoi(argv[3]);
