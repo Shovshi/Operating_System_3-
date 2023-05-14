@@ -2,98 +2,92 @@
 
 int ipv4_tcp_client(int port, char *ip_address) 
 {
-    int sock;
-    struct sockaddr_in server;
-    char response[1024];
-    char buffer[1024];
-    int file_fd;
-    ssize_t read_size;
+    int sockfd, fd, n, bytes_sent;
+    struct sockaddr_in servaddr;
+    char buffer[BUFFER_SIZE];
 
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock == -1) 
-    {
-        perror("socket");
-        return 1;
-    }
-
-    server.sin_addr.s_addr = inet_addr(ip_address);
-    server.sin_family = AF_INET;
-    server.sin_port = htons(1234);
-
-    if (connect(sock, (struct sockaddr *)&server, sizeof(server)) < 0) 
-    {
-        perror("connect");
-        return 1;
-    }
-
-    if (recv(sock, response, 1024, 0) < 0) 
-    {
-        perror("recv");
-        return 1;
-    }
-
-    file_fd = open(FILENAME, O_RDONLY);
-    if (file_fd == -1)
-    {
-        perror("open");
-        return 1;
-    }
-
-    while ((read_size = read(file_fd, buffer, 1024)) > 0)
-    {
-        if (send(sock, buffer, read_size, 0) < 0) 
-        {
-            perror("send");
-            return 1;
-        }
-    }
-
-    close(file_fd);
-    close(sock);
-
-    return 0;
-}
-
-int ipv4_udp_client(int port , char* ip_address)
-{
-     // Open the input file
-    FILE* input_file = fopen(FILENAME, "r");
-    if (!input_file) {
-        perror("fopen() failed");
-        return -1;
-    }
-
-    // Create a UDP socket
-    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0) {
-        perror("socket() failed");
-        fclose(input_file);
+    // Create a socket
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1) {
+        perror("Socket creation failed");
         return -1;
     }
 
     // Set the server address and port
-    struct sockaddr_in server_addr = {0};
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = inet_addr(ip_address);
-    server_addr.sin_port = htons(port);
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr(ip_address);
+    servaddr.sin_port = htons(port);
 
-    // Send the file to the server in chunks
-    char buffer[BUFFER_SIZE];
-    size_t bytes_read = 0;
-    ssize_t bytes_sent = 0;
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), input_file)) > 0) {
-        bytes_sent = sendto(sockfd, buffer, bytes_read, 0,
-                            (struct sockaddr*)&server_addr, sizeof(server_addr));
-        if (bytes_sent < 0) {
-            perror("sendto() failed");
-            fclose(input_file);
+    // Connect to the server
+    if (connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) != 0) {
+        perror("Connection failed");
+        return -1;
+    }
+
+    // Open the file for reading
+    fd = open(FILENAME, O_RDONLY);
+    if (fd == -1) {
+        perror("File open failed");
+        close(sockfd);
+        return -1;
+    }
+
+    // Send the file data to the server
+    while ((n = read(fd, buffer, BUFFER_SIZE)) > 0) {
+        bytes_sent = send(sockfd, buffer, n, 0);
+        if (bytes_sent == -1) {
+            perror("Error sending file data");
+            close(fd);
             close(sockfd);
             return -1;
         }
     }
 
-    // Close the socket and file
-    fclose(input_file);
+    // Close the file and the socket
+    close(fd);
+    close(sockfd);
+    return 0;
+}
+
+int ipv4_udp_client(int port , char* ip_address)
+{
+     int sockfd, n;
+    struct sockaddr_in servaddr;
+    char buffer[BUFFER_SIZE];
+    FILE *fp;
+
+    // create socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("socket creation failed");
+        return -1;
+    }
+
+    // setup server address
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(port);
+    if (inet_pton(AF_INET, ip_address, &servaddr.sin_addr) <= 0) {
+        perror("invalid address");
+        return -1;
+    }
+
+    // open file
+    if ((fp = fopen(FILENAME, "rb")) == NULL) {
+        perror("file opening failed");
+        return -1;
+    }
+
+    // send file contents to server
+    while ((n = fread(buffer, 1, BUFFER_SIZE, fp)) > 0) {
+        if (sendto(sockfd, buffer, n, 0, (const struct sockaddr *) &servaddr, sizeof(servaddr)) == -1) {
+            perror("sendto failed");
+            return -1;
+        }
+    }
+
+    // close file and socket
+    fclose(fp);
     close(sockfd);
 
     return 0;
@@ -242,10 +236,10 @@ int uds_dgram_client()
     }
 
     // Send the file contents in datagrams
-    char buffer[BUFFER_SIZE];
+    char buffer_dgram[BUFFER_SIZE];
     size_t bytes_read;
-    while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, file)) > 0) {
-        ssize_t bytes_sent = send(sockfd, buffer, bytes_read, 0);
+    while ((bytes_read = fread(buffer_dgram, 1, BUFFER_SIZE, file)) > 0) {
+        ssize_t bytes_sent = send(sockfd, buffer_dgram, bytes_read, 0);
         if (bytes_sent < 0) {
             perror("send() failed");
             break;

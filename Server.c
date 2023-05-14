@@ -78,58 +78,70 @@ void send_options_server(char *type , char *param , int port , int qFlag)
 
 int ipv4_tcp_server(int port , int qFlag)
 {
-    int sock, client_sock;
-    struct sockaddr_in server, client;
+    int server_socket, client_socket, bytes_received, bytes_sent;
+    struct sockaddr_in server_address, client_address;
+    socklen_t client_address_length;
     char buffer[BUFFER_SIZE];
-    ssize_t read_size;
-    FILE *file;
-
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock == -1) 
-    {
-        perror("socket");
-        return 1;
+    FILE *fp;
+    
+    // create the server socket
+    server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_socket < 0) {
+        perror("Error creating socket");
+        return -1;
     }
 
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(port);
+    // set up the server address
+    server_address.sin_family = AF_INET;
+    server_address.sin_addr.s_addr = INADDR_ANY;
+    server_address.sin_port = htons(port);
 
-    if (bind(sock, (struct sockaddr *)&server, sizeof(server)) < 0) 
-    {
-        perror("bind");
-        return 1;
+    // bind the socket to the server address
+    if (bind(server_socket, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
+        perror("Error binding socket");
+        return -1;
     }
 
-    if (listen(sock, 6) < 0) 
-    {
-        perror("listen");
-        return 1;
+    // listen for incoming connections
+    listen(server_socket, 1);
+    printf("Listening on port %d...\n", port);
+
+    // accept the client connection
+    client_address_length = sizeof(client_address);
+    client_socket = accept(server_socket, (struct sockaddr *) &client_address, &client_address_length);
+    if (client_socket < 0) {
+        perror("Error accepting client connection");
+        return -1;
     }
 
-    socklen_t client_len = sizeof(client);
-    client_sock = accept(sock, (struct sockaddr *)&client, &client_len);
-    if (client_sock < 0) 
-    {
-        perror("accept");
-        return 1;
+
+    // open a file for writing
+    fp = fopen(FILENAME, "wb");
+    if (fp == NULL) {
+        perror("Error opening file for writing");
+        return -1;
     }
 
-    file = fopen(FILENAME, "w");
-    if (file == NULL)
+    // receive the file data from the client
+    while (bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0))
     {
-        perror("fopen");
-        return 1;
+        if (bytes_received < 0) {
+            perror("Error receiving file data");
+            return -1;
+        }
+        bytes_sent = fwrite(buffer, sizeof(char), bytes_received, fp);
+        if (bytes_sent < bytes_received) {
+            perror("Error writing to file");
+            return -1;
+        }
     }
+    fclose(fp);
 
-    while ((read_size = recv(client_sock, buffer, BUFFER_SIZE, 0)) > 0)
-    {
-        fwrite(buffer, sizeof(char), read_size, file);
-    }
+    printf("File received and saved as received_file.txt\n");
 
-    fclose(file);
-    close(client_sock);
-    close(sock);
+    // close the client socket and server socket
+    close(client_socket);
+    close(server_socket);
 
      if (qFlag == 0)
     {
@@ -145,59 +157,44 @@ int ipv4_tcp_server(int port , int qFlag)
 
 int ipv4_udp_server(int port , int qFlag)
 {
-    int sockfd;
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t client_len = sizeof(client_addr);
+     int sockfd, n;
+    struct sockaddr_in servaddr, cliaddr;
+    socklen_t len;
     char buffer[BUFFER_SIZE];
+    FILE *fp;
 
-    // Create socket
-    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0) {
-        perror("Error creating socket");
+    // create socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("socket creation failed");
         return -1;
     }
 
-    // Set up server address
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(1234);
+    // setup server address
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_port = htons(port);
 
-    // Bind socket to address
-    if (bind(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
-        perror("Error binding socket to address");
+    // bind socket to address
+    if (bind(sockfd, (const struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
+        perror("bind failed");
         return -1;
     }
 
-    printf("Server listening on port %d...\n", port);
-
-    while (1) {
-        // Receive data from client
-        memset(buffer, 0, sizeof(buffer));
-        int recv_bytes = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, (struct sockaddr *) &client_addr, &client_len);
-        if (recv_bytes < 0) {
-            perror("Error receiving data from client");
-            return -1;
-        }
-
-        // Write received data to file
-        FILE *fp = fopen(FILENAME, "ab");
-        if (fp == NULL) {
-            perror("Error opening file");
-            return -1;
-        }
-        fwrite(buffer, 1, recv_bytes, fp);
-        fclose(fp);
-
-        // Send acknowledgement to client
-        char ack[] = "ACK";
-        int send_bytes = sendto(sockfd, ack, sizeof(ack), 0, (struct sockaddr *) &client_addr, client_len);
-        if (send_bytes < 0) {
-            perror("Error sending acknowledgement to client");
-            return -1;
-        }
+    // create output file
+    if ((fp = fopen(FILENAME, "wb")) == NULL) {
+        perror("file creation failed");
+        return -1;
     }
 
+    // receive file contents from client
+    len = sizeof(cliaddr);
+    while ((n = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, (struct sockaddr *) &cliaddr, &len)) > 0) {
+        fwrite(buffer, 1, n, fp);
+    }
+
+    // close file and socket
+    fclose(fp);
     close(sockfd);
 
      if (qFlag == 0)

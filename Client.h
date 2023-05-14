@@ -10,7 +10,7 @@
 #include <sys/stat.h>  
 
 #define FILENAME "large_file.txt"
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 2048
 #define SERVER_PATH "/tmp/server_socket"
 #define SOCK_PATH "echo_socket"
 #define SHM_NAME "/my_shm"
