@@ -575,18 +575,31 @@ int server_options(int argc, char* argv[])
     return 0;
 }
 
- void send_options_server(char *type , char *param , int port)
- {
+void send_options_server(char *type , char *param , int port)
+{
     switch (type[0])
     {
     case 'i':
-        switch (param[0]) {
-            case 't':
-                ipv4_tcp_server(port);
-                break;
-            case 'u':
-                ipv4_udp_server(port);
-                break;
+        if (strcmp(type, "ipv4") == 0) {
+            switch (param[0]) {
+                case 't':
+                    ipv4_tcp_server(port);
+                    break;
+                case 'u':
+                    ipv4_udp_server(port);
+                    break;
+            }
+        } else if (strcmp(type, "ipv6") == 0) {
+            switch (param[0]) {
+                case 't':
+                    ipv6_tcp_server(port);
+                    break;
+                case 'u':
+                    ipv6_udp_server(port);
+                    break;
+            }
+        } else {
+            printf("Invalid option\n");
         }
         break;
     case 'm':
@@ -609,8 +622,9 @@ int server_options(int argc, char* argv[])
     default:
         printf("Invalid option\n");
         break;
- }
- }
+    }
+}
+
     //ipv4_tcp_server(atoi(argc[1]));
     //ipv4_udp_server(atoi(argc[1]));
     //ipv6_udp_server(atoi(argc[1]));

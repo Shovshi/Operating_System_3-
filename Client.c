@@ -450,7 +450,7 @@ int client_options(int argv , char* argc[])
     return 0;
 }
 
-send_options_client(char *type , char *param , char *ip_address , int port)
+void send_options_client(char *type , char *param , char *ip_address , int port)
 {
     switch (type[0])
     {
